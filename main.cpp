@@ -1,7 +1,7 @@
 #include "DatasetGenerator.h"
 
-bool generateAllPatches(string feature_address, string depth_address, string internalfile, string externalfile,
-                        string namelistfile, string scaledpath, string patchpath) {
+bool generateAllPatches(const string & feature_address, const string & depth_address, const string & internalfile, const string & externalfile,
+                        const string & namelistfile, const string & scaledpath, const string & patchpath) {
     bool flag = false;
     int picwidth = NULL, picheight = NULL;
 
@@ -10,21 +10,17 @@ bool generateAllPatches(string feature_address, string depth_address, string int
 
     //for every picture
 #pragma omp parallel for num_threads(8)
-    for (vector<int>::iterator it = namelist.begin(); it != namelist.end() ; it++) {
-
-        cout << "pic1: " << *it << endl;
+    for (vector<int>::iterator it = namelist.begin(); it != namelist.end(); it++) {
+        cout << "pic: " << *it << endl;
         //read feature detection
         Mat table0 = readDataIntoMat(*it, "feature", feature_address, depth_address);
-        //read depth map
-        Mat depthtable0 = readDataIntoMat(*it, "depth", feature_address, depth_address);
-        //external matrix
-        Eigen::Matrix4f external0 = getExternal(*it, externalfile);
+        //internal matrix
         Eigen::Matrix3f internal = readInternal(*it, internalfile, &picwidth, &picheight);
 
         for (int i = 0; i < table0.rows; i++) {
-
-            if (table0.at<float>(i, 3) > 25.3) continue; //too large scale, not in the first 4 octaves, may be wrong, skip
-            if (table0.at<float>(i, 0) == 0) break;//all the features have been read
+            if (table0.at<float>(i, 3) > 25.3)
+                continue; //too large scale, not in the first 4 octaves, may be wrong, skip
+//            if (table0.at<float>(i, 0) == 0) break;//all the features have been read
             //point in pic1: x0,y0,z0,xscale0,yscale0,ori0,featureID
 
             Mat point0 = Mat::zeros(1, 7, CV_32FC1);
@@ -49,65 +45,11 @@ bool generateAllPatches(string feature_address, string depth_address, string int
     return flag;
 }
 
-bool generateList(string feature_address, string depth_address, string internalfile, string externalfile,
-                  string namelistfile, string scaledpath, string matchpath, string nonmatchpath){
-    
-}
-
-/*
- Usage:
- /home/yirenli/dev/DatasetGenerationHelper/out/keypoints/ /home/yirenli/dev/DatasetGenerationHelper/out/depth_maps/ /home/yirenli/dev/DatasetGenerationHelper/out/cameras_images_txt/cameras.txt /home/yirenli/dev/DatasetGenerationHelper/out/cameras_images_txt/images.txt /home/yirenli/dev/DatasetGenerationHelper/out/namelist.txt /home/yirenli/dev/DatasetGenerationHelper/out/scale/ ../out/matchpatch/ ../out/nonmatchpatch/ ../out/match ../out/nonmatch
-*/
-int main(int argc, char **argv) {
-    if (argc != 11) {
-        cout << "Incorrect number of arguments given." << endl;
-        cout << "10 required in this order:" << endl;
-        cout << "- feature txt address (folder with many files with numbers as names)" << endl;
-        cout << "- depth map address (.txt)" << endl;
-        cout << "- internal file (cameras.txt)" << endl;
-        cout << "- external file (images.txt)" << endl;
-        cout << "- namelist file" << endl;
-        cout << "- scaled images path" << endl;
-        cout << "- match patch dir" << endl;
-        cout << "- nonmatch patch path" << endl;
-        cout << "- matchtablepath" << endl;
-        cout << "- nonmatch table path" << endl;
-        return 1;
-    }
-    string feature_address, depth_address, internalfile, externalfile, namelistfile, scaledpath, matchpath, nonmatchpath, matchtablepath, nonmatchtablepath;
-    feature_address = argv[1];
-    depth_address = argv[2];
-    internalfile = argv[3];
-    externalfile = argv[4];
-    namelistfile = argv[5];
-    scaledpath = argv[6];
-    matchpath = argv[7];
-    nonmatchpath = argv[8];
-    matchtablepath = argv[9];
-    nonmatchtablepath = argv[10];
-
-    //若不存在 创建完没有打开
-    char *matchtable = const_cast<char *>(matchtablepath.c_str());
-    fstream _mfile;
-    _mfile.open(matchtable, ios::in);
-    if (!_mfile) {
-        ofstream mfile(matchtable);
-        mfile.close();
-    }
-    _mfile.close();
-
-    char *nonmatchtable = const_cast<char *>(nonmatchtablepath.c_str());
-    ofstream nmfile(nonmatchtable);
-    fstream _nmfile;
-    _nmfile.open(nonmatchtable, ios::in);
-    if (!_nmfile) {
-        ofstream nmfile(nonmatchtable);
-        nmfile.close();
-    }
-    _nmfile.close();
-
-
-    float realdepthscalefactor = 22.8232 / 0.918737;// the dense map should be scaled to real size and compare
+bool generateList(const string &feature_address, const string &depth_address, const string &internalfile,
+                  const string &externalfile, const string &namelistfile, const string &matchtablepath,
+                  const string &nonmatchtablepath, const string &depthscalefactor) {
+    srand((unsigned)time(NULL));
+    float realdepthscalefactor = atof(depthscalefactor.c_str());//22.8232 / 0.918737;// the dense map should be scaled to real size and compare
     float locthresh = 5, depththresh = 0.3;//depththresh unit cm in full.ply
     float scalethresh = 0.25, orithresh = _pi / 8;
 //    vector<int> picwidth, picheight;
@@ -156,7 +98,7 @@ int main(int argc, char **argv) {
                 //if (table0.at<float>(i, 0) != 718) continue;
                 if (table0.at<float>(i, 3) > 25.3)
                     continue; //too large scale, not in the first 4 octaves, may be wrong, skip
-                if (table0.at<float>(i, 0) == 0) break;//all the features have been read
+//                if (table0.at<float>(i, 0) == 0) break;//all the features have been read
                 //point in pic1: x0,y0,z0,xscale0,yscale0,ori0,featureID
 
                 Mat point0 = Mat::zeros(1, 7, CV_32FC1);
@@ -233,8 +175,10 @@ int main(int argc, char **argv) {
                     if (flag == -1.) {
                         //crop non-match
                         //check if the point is too close to edge
-                        writePair(*it, point0.at<float>(0, 6), *it1, point2.at<float>(0, 6), "nonmatch", matchtablepath,
-                                  nonmatchtablepath);
+                        if (rand()/double(RAND_MAX)>0.9){
+                            writePair(*it, point0.at<float>(0, 6), *it1, point2.at<float>(0, 6), "nonmatch", matchtablepath,
+                                      nonmatchtablepath);
+                        }
                         //normpatch(*it, point0, *it1, point2, "unmatch");
                     }
 
@@ -313,16 +257,72 @@ int main(int argc, char **argv) {
 //                        normpatch(*it, point0, *it1, point2final, "match", matchpath, nonmatchpath, scaledpath);
                         writePair(*it, point0.at<float>(0, 6), *it1, point2final.at<float>(0, 6), "match",
                                   matchtablepath, nonmatchtablepath);
-
                     }
-
-
                 }
-
             }
         }
-
-
     }
+}
+
+/*
+ Usage:
+ /home/yirenli/dev/DatasetGenerationHelper/out/keypoints/ /home/yirenli/dev/DatasetGenerationHelper/out/depth_maps/ /home/yirenli/dev/DatasetGenerationHelper/out/cameras_images_txt/cameras.txt /home/yirenli/dev/DatasetGenerationHelper/out/cameras_images_txt/images.txt /home/yirenli/dev/DatasetGenerationHelper/out/namelist.txt /home/yirenli/dev/DatasetGenerationHelper/out/scale/ ../out/all_patches/ ../out/match_af.txt ../out/nonmatch_af.txt 18.1026
+ */
+int main(int argc, char **argv) {
+    if (argc != 11) {
+        cout << "Incorrect number of arguments given." << endl;
+        cout << "10 required in this order:" << endl;
+        cout << "- feature txt address (folder with many files with numbers as names)" << endl;
+        cout << "- depth map address (.txt)" << endl;
+        cout << "- internal file (cameras.txt)" << endl;
+        cout << "- external file (images.txt)" << endl;
+        cout << "- namelist file" << endl;
+        cout << "- scaled images path" << endl;
+        cout << "- all patches dir" << endl;
+//        cout << "- match patch dir" << endl;
+//        cout << "- nonmatch patch path" << endl;
+        cout << "- matchtablepath" << endl;
+        cout << "- nonmatch table path" << endl;
+        cout << "- realdepthscalefactor" << endl;
+        return 1;
+    }
+    string feature_address, depth_address, internalfile, externalfile, namelistfile, scaledpath, allpatchespath, matchtablepath, nonmatchtablepath, realdepthscalefactor;
+    feature_address = argv[1];
+    depth_address = argv[2];
+    internalfile = argv[3];
+    externalfile = argv[4];
+    namelistfile = argv[5];
+    scaledpath = argv[6];
+    allpatchespath = argv[7];
+//    matchpath = argv[7];
+//    nonmatchpath = argv[8];
+    matchtablepath = argv[8];
+    nonmatchtablepath = argv[9];
+    realdepthscalefactor = argv[10];
+
+    //若不存在 创建完没有打开
+    char *matchtable = const_cast<char *>(matchtablepath.c_str());
+    fstream _mfile;
+    _mfile.open(matchtable, ios::in);
+    if (!_mfile) {
+        ofstream mfile(matchtable);
+        mfile.close();
+    }
+    _mfile.close();
+
+    char *nonmatchtable = const_cast<char *>(nonmatchtablepath.c_str());
+    ofstream nmfile(nonmatchtable);
+    fstream _nmfile;
+    _nmfile.open(nonmatchtable, ios::in);
+    if (!_nmfile) {
+        ofstream nmfile(nonmatchtable);
+        nmfile.close();
+    }
+    _nmfile.close();
+
+    if (generateList(feature_address, depth_address, internalfile, externalfile, namelistfile, matchtablepath, nonmatchtablepath, realdepthscalefactor)){
+        cout << "generateList done." << endl;
+    }
+
     return 0;
 }

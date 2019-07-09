@@ -14,6 +14,7 @@
 #include <math.h>
 #include <omp.h>
 #include <stdlib.h>
+#include <time.h>
 
 using namespace std;
 using namespace cv;

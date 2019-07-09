@@ -428,7 +428,6 @@ void crop(int picId0, Mat point0, string patchpath, const string& scaledpath)
 
     //x0, y0, z0, xscale, yscale, ori, featureID
     int x0 = point0.at<float>(0, 0), y0 = point0.at<float>(0, 1);
-
     float scale0 = point0.at<float>(0, 3), ori0 = point0.at<float>(0, 5);
 
     //cout << "ori1 is"<<ori1 << endl;
