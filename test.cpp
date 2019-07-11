@@ -13,7 +13,9 @@ int main(int argc, char **argv) {
     float s = 3.0;
     for (int a = 0; a < 4; a++) {
         for (int i = 0; i <= s + 2; i++) {//s+3
-            cout << pow(2, (double) a) * pow(2, (double) i / s) * sigma << endl;
+            double d = pow(2, (double) a) * pow(2, (double) i / s) * sigma;
+            cout << "orig: " << d << endl;
+            printf("%.1f\n", d);
         }
         cout << endl;
     }

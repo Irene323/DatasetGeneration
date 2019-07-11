@@ -22,7 +22,8 @@ using namespace Eigen;
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _pi 3.1415926
-#define FIRSTIMAGENAME 2042
+
+extern int FIRSTIMAGENAME;
 
 inline vector<string> split(const string &str, const string &c);
 
@@ -80,6 +81,6 @@ Eigen::Matrix3f readInternal(int imagename, const string &internalfile, int *wid
 
 Mat rotpoint(float tmpx, float tmpy, float cx, float cy, float ori0);
 
-void crop(int picId0, Mat point0, string patchpath, const string& scaledpath);
+void crop(int picId0, Mat point0, string patchpath, const string &scaledpath, const vector<float> &pyramid, int patchsize);
 
 #endif //DATASETGENERATION_DATASETGENERATOR_H

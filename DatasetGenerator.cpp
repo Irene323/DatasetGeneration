@@ -1,5 +1,7 @@
 #include "DatasetGenerator.h"
 
+int FIRSTIMAGENAME;
+
 //This function is a small helper to split string str with c
 inline vector<string> split(const string &str, const string &c) {
     vector<string> r;
@@ -65,11 +67,7 @@ Point2i getDepthMapSize(const string &filePath) {
 //separated with "\t"
 void writePair(int picID1, int featureID1, int picID2, int featureID2, const string &flag, const string &matchtablepath,
                const string &nonmatchtablepath) {
-    fstream file;
-    char *fileadd;
-    if (flag == "match") fileadd = const_cast<char *>(matchtablepath.c_str());
-    else fileadd = const_cast<char *>(nonmatchtablepath.c_str());
-    file.open(fileadd, ios::out | ios::app);
+    std::ofstream file(flag == "match" ? matchtablepath : nonmatchtablepath, std::ios::app);
     if (file.fail()) {
         cout << "can not open file" << endl;
     }
@@ -246,6 +244,7 @@ Eigen::Matrix4f getExternal(int imagename, const string &externalfile) {
 
     while (getline(fin, s0)) {
         vector<string> a = split(s0, " ");
+//        cout << "in getExternal: " << FIRSTIMAGENAME << endl;
         if (atoi(a[0].c_str()) == (imagename % FIRSTIMAGENAME + 1)) {
             for (int i = 0; i < para.cols; i++) {
                 para.at<float>(0, i) = atof(a[i + 1].c_str());
@@ -418,70 +417,58 @@ Mat rotpoint(float tmpx, float tmpy, float cx, float cy, float ori0) {
 }
 
 /*This function normalize and then crop the patch*/
-void crop(int picId0, Mat point0, string patchpath, const string& scaledpath)
-{
+void
+crop(int picId0, Mat point0, string patchpath, const string &scaledpath, const vector<float> &pyramid, int patchsize) {
     float featureId0 = point0.at<float>(0, 6);
     string patchname0 = to_string(picId0) + "_" + to_string(int(featureId0)) + ".png";
-    string patchadd;
-
-    patchadd = patchpath;
 
     //x0, y0, z0, xscale, yscale, ori, featureID
     int x0 = point0.at<float>(0, 0), y0 = point0.at<float>(0, 1);
     float scale0 = point0.at<float>(0, 3), ori0 = point0.at<float>(0, 5);
 
-    //cout << "ori1 is"<<ori1 << endl;
-    int head0 = 0; int tail0 = 0;
-
-    float sigma = 0.8;
-
-    for (int exp = 0; exp <5; exp++) {
-        float thres0 = (sigma + sigma / pow(2, 1 / 3)) / 2;
-        float thres1 = (sigma *pow(2, 1 / 3) + sigma) / 2;
-        float thres2 = (sigma *pow(2, 2 / 3) + sigma *pow(2, 1 / 3)) / 2;
-        float thres3 = (sigma * 2 + sigma*pow(2, 4 / 3)) / 2;
-
-        if (scale0 >= thres0 && scale0 < thres1) { head0 = exp; tail0 = 1; }
-        if (scale0 >= thres1 && scale0 < thres2) { head0 = exp; tail0 = 2; }
-        if (scale0 >= thres2 && scale0 < thres3) {
-            head0 = exp; tail0 = 3;
+    //find nearest level
+    float nearest = *pyramid.rbegin();
+    int nearestIndex = 0;
+    float distanceLast = 999.9;
+    for (int i = 0; i < pyramid.size(); i++) {
+        auto d = abs(pyramid[i] - scale0);
+        if (d > distanceLast) {
+            nearest = pyramid[i - 1];
+            nearestIndex = i - 1;
+            break;
         }
-        sigma = sigma * 2;
+        distanceLast = d;
     }
-
-    string picadd0 = scaledpath + to_string(head0) + "_" + to_string(tail0) + "/IMG_" + to_string(picId0) + ".JPG";
+    char a[10];
+    sprintf(a,"%.1f",nearest);
+    string picadd0 = scaledpath + a + "\\IMG_" + to_string(picId0) + ".png";
 
     //cropping patch
-    Mat patch = Mat::zeros(64, 64, CV_32FC3);
-
-    //another try, since the scale method we are doing is not working
-    //use opencv GaussianBlur()
-    //cout << "patch0 session:ori1 " << ori1 << endl;
-
-    //patch0 ==========================================================================================
+    Mat patch = Mat::zeros(patchsize, patchsize, CV_32FC3);
+    cout << picadd0 << endl;
     Mat img0 = imread(picadd0);
     //imshow("img0", img0);
-    //imshow(picahh1);
-    Mat patch0;
-    //Mat img0blur;
     Mat img0blur = img0.clone();
-    //GaussianBlur(img0, img0blur, Size(0,0), scale0, scale0, BORDER_DEFAULT);
 
-    //int a0 = 32 ;//multiplication
-
-    int a0;
-    if (head0 == 0) {
-        a0 = 32 * 2 * scale0;
+    //find the corresponding patch size and feature location in its scale
+    int a0;//half of the patch size in corresponding scale
+    if (nearestIndex <= 3) {//these scale levels have been upsampled by 2
+        a0 = patchsize / 2 * 2 * scale0;
         x0 *= 2;
         y0 *= 2;
-    }
-    else {
-        a0 = 32 * scale0 / pow(2, head0 - 1);
-        x0 /= pow(2, head0 - 1);
-        y0 /= pow(2, head0 - 1);
+    } else if (nearestIndex <= 6) {//these scale levels are of original size
+        a0 = patchsize / 2 * scale0;
+    } else if (nearestIndex <= 9) {//these scale levels are downsampled by 2
+        a0 = patchsize / 2 / 2 * scale0;
+        x0 /= 2;
+        y0 /= 2;
+    } else {//these scale levels are downsampled by 4
+        a0 = patchsize / 2 / 4 * scale0;
+        x0 /= 4;
+        y0 /= 4;
     }
 
-
+    //find the 4 corner of patch in this scale level
     Mat trans0 = Mat::eye(3, 3, CV_32FC1);
     trans0.at<float>(0, 2) = -x0;
     trans0.at<float>(1, 2) = -y0;
@@ -496,8 +483,8 @@ void crop(int picId0, Mat point0, string patchpath, const string& scaledpath)
     invtrans0.at<float>(0, 2) = x0;
     invtrans0.at<float>(1, 2) = y0;
 
-    Mat oldcorners0 = Mat::ones(3, 4, CV_32FC1);
-    Mat newcorners0 = Mat::ones(3, 4, CV_32FC1);
+    Mat oldcorners0 = Mat::ones(3, 4, CV_32FC1);//the 4 corner points of the patch before rotation
+    Mat newcorners0 = Mat::ones(3, 4, CV_32FC1);//the 4 corner points of the patch after considering orientation
 
     oldcorners0.at<float>(0, 0) = x0 - a0;
     oldcorners0.at<float>(1, 0) = y0 - a0;
@@ -509,14 +496,18 @@ void crop(int picId0, Mat point0, string patchpath, const string& scaledpath)
     oldcorners0.at<float>(1, 3) = y0 + a0;
 
     newcorners0 = invtrans0 * rot0 * trans0 * oldcorners0;
-    /*
-    cout << "patch 1, the rotation angle is " << ori0 << endl;
-    cout << " the 4 corners are" << endl;
-    cout << "up left point" << newcorners0.at<float>(0, 0) << "\t" << newcorners0.at<float>(1, 0) << endl;
-    cout << "up tight point" << newcorners0.at<float>(0, 1) << "\t" << newcorners0.at<float>(1, 1) << endl;
-    cout << "down left point" << newcorners0.at<float>(0, 2) << "\t" << newcorners0.at<float>(1, 2) << endl;
-    cout << "down right point" << newcorners0.at<float>(0, 3) << "\t" << newcorners0.at<float>(1, 3) << endl;
-    */
+
+//    cout << "patch 1, the rotation angle is " << ori0 << endl;
+//    cout << " the 4 corners are" << endl;
+//    cout << "up left point" << newcorners0.at<float>(0, 0) << "\t" << newcorners0.at<float>(1, 0) << "\t"
+//         << newcorners0.at<float>(2, 0) << endl;
+//    cout << "up tight point" << newcorners0.at<float>(0, 1) << "\t" << newcorners0.at<float>(1, 1) << "\t"
+//         << newcorners0.at<float>(2, 1) << endl;
+//    cout << "down left point" << newcorners0.at<float>(0, 2) << "\t" << newcorners0.at<float>(1, 2) << "\t"
+//         << newcorners0.at<float>(2, 2) << endl;
+//    cout << "down right point" << newcorners0.at<float>(0, 3) << "\t" << newcorners0.at<float>(1, 3) << "\t"
+//         << newcorners0.at<float>(2, 3) << endl;
+
     Point2f src0[4], dst0[4];
     //up left point
     src0[0].x = newcorners0.at<float>(0, 0);
@@ -541,7 +532,8 @@ void crop(int picId0, Mat point0, string patchpath, const string& scaledpath)
 
     Mat transMatrix0 = Mat::zeros(3, 3, CV_32FC1);
     transMatrix0 = getPerspectiveTransform(src0, dst0);
-    warpPerspective(img0blur, patch0, transMatrix0, patch.size(), INTER_LINEAR);
-    //imshow("patch0", patch0);
-    imwrite(patchadd + patchname0, patch0);
+    warpPerspective(img0blur, patch, transMatrix0, patch.size(), INTER_LINEAR);
+    //imshow("patch", patch);
+    cout << "imwrite" << patchpath + patchname0 << endl;
+    imwrite(patchpath + patchname0, patch);
 }

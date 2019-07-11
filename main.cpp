@@ -1,12 +1,21 @@
 #include "DatasetGenerator.h"
 
-bool generateAllPatches(const string & feature_address, const string & depth_address, const string & internalfile, const string & externalfile,
-                        const string & namelistfile, const string & scaledpath, const string & patchpath) {
+
+bool generateAllPatches(const string &feature_address, const string &depth_address, const string &internalfile,
+                        const string &externalfile, const string &namelistfile, const string &scaledpath,
+                        const string &patchpath) {
     bool flag = false;
-    int picwidth = NULL, picheight = NULL;
+    int picwidth = 0, picheight = 0;
 
     //namelist of the now processing images
     vector<int> namelist = readDataIntVec(namelistfile);
+    FIRSTIMAGENAME = namelist[0];
+    cout << "FIRSTIMAGENAME after changed in generateAlPatches: " << FIRSTIMAGENAME << endl;
+    vector<float> pyramid;
+    for (int i = 0; i < 13; i++) {//first four octaves
+        pyramid.push_back(1.6 * pow(2, (float)i / 3));
+        cout << pyramid[i] << endl;
+    }
 
     //for every picture
 #pragma omp parallel for num_threads(8)
@@ -17,12 +26,13 @@ bool generateAllPatches(const string & feature_address, const string & depth_add
         //internal matrix
         Eigen::Matrix3f internal = readInternal(*it, internalfile, &picwidth, &picheight);
 
+        //for every feature
         for (int i = 0; i < table0.rows; i++) {
-            if (table0.at<float>(i, 3) > 25.3)
+            if (table0.at<float>(i, 3) > 25.6)
                 continue; //too large scale, not in the first 4 octaves, may be wrong, skip
 //            if (table0.at<float>(i, 0) == 0) break;//all the features have been read
-            //point in pic1: x0,y0,z0,xscale0,yscale0,ori0,featureID
 
+            //point in pic1: x0,y0,z0,xscale0,yscale0,ori0,featureID
             Mat point0 = Mat::zeros(1, 7, CV_32FC1);
             point0.at<float>(0, 0) = table0.at<float>(i, 1);//x0
             point0.at<float>(0, 1) = table0.at<float>(i, 2);//y0
@@ -37,8 +47,7 @@ bool generateAllPatches(const string & feature_address, const string & depth_add
                  || point0.at<float>(0, 1) < distthresh0 || point0.at<float>(0, 1) > picheight - distthresh0)) {
                 continue;
             }
-
-            crop(*it, point0, patchpath, scaledpath);
+            crop(*it, point0, patchpath, scaledpath, pyramid, 64);
         }
     }
     flag = true;
@@ -48,8 +57,9 @@ bool generateAllPatches(const string & feature_address, const string & depth_add
 bool generateList(const string &feature_address, const string &depth_address, const string &internalfile,
                   const string &externalfile, const string &namelistfile, const string &matchtablepath,
                   const string &nonmatchtablepath, const string &depthscalefactor) {
-    srand((unsigned)time(NULL));
-    float realdepthscalefactor = atof(depthscalefactor.c_str());//22.8232 / 0.918737;// the dense map should be scaled to real size and compare
+    srand((unsigned) time(nullptr));
+    float realdepthscalefactor = atof(
+            depthscalefactor.c_str());//22.8232 / 0.918737;// the dense map should be scaled to real size and compare
     float locthresh = 5, depththresh = 0.3;//depththresh unit cm in full.ply
     float scalethresh = 0.25, orithresh = _pi / 8;
 //    vector<int> picwidth, picheight;
@@ -57,7 +67,8 @@ bool generateList(const string &feature_address, const string &depth_address, co
 
     //namelist of the now processing images
     vector<int> namelist = readDataIntVec(namelistfile);
-
+    FIRSTIMAGENAME = namelist[0];
+    cout << "FIRSTIMAGENAME after changed in generateList: " << FIRSTIMAGENAME << endl;
     //for every picture
 #pragma omp parallel for num_threads(8)
     for (vector<int>::iterator it = namelist.begin(); it != namelist.end() - 1; it++) {
@@ -96,7 +107,7 @@ bool generateList(const string &feature_address, const string &depth_address, co
 
             for (int i = 0; i < table0.rows; i++) {
                 //if (table0.at<float>(i, 0) != 718) continue;
-                if (table0.at<float>(i, 3) > 25.3)
+                if (table0.at<float>(i, 3) > 25.6)
                     continue; //too large scale, not in the first 4 octaves, may be wrong, skip
 //                if (table0.at<float>(i, 0) == 0) break;//all the features have been read
                 //point in pic1: x0,y0,z0,xscale0,yscale0,ori0,featureID
@@ -137,7 +148,7 @@ bool generateList(const string &feature_address, const string &depth_address, co
                 //for every feature point in pic2
                 for (int j = 0; j < table2.rows; j++) {
                     //if (table2.at<float>(j, 0) != 469) continue;
-                    if (table2.at<float>(j, 3) > 25.3) continue;
+                    if (table2.at<float>(j, 3) > 25.6) continue;
                     if (table2.at<float>(j, 0) == 0) {
                         //cout << "end of points in pic2=================" << endl;
                         break;
@@ -175,8 +186,9 @@ bool generateList(const string &feature_address, const string &depth_address, co
                     if (flag == -1.) {
                         //crop non-match
                         //check if the point is too close to edge
-                        if (rand()/double(RAND_MAX)>0.9){
-                            writePair(*it, point0.at<float>(0, 6), *it1, point2.at<float>(0, 6), "nonmatch", matchtablepath,
+                        if (rand() / double(RAND_MAX) > 0.98) {
+                            writePair(*it, point0.at<float>(0, 6), *it1, point2.at<float>(0, 6), "nonmatch",
+                                      matchtablepath,
                                       nonmatchtablepath);
                         }
                         //normpatch(*it, point0, *it1, point2, "unmatch");
@@ -279,8 +291,6 @@ int main(int argc, char **argv) {
         cout << "- namelist file" << endl;
         cout << "- scaled images path" << endl;
         cout << "- all patches dir" << endl;
-//        cout << "- match patch dir" << endl;
-//        cout << "- nonmatch patch path" << endl;
         cout << "- matchtablepath" << endl;
         cout << "- nonmatch table path" << endl;
         cout << "- realdepthscalefactor" << endl;
@@ -294,34 +304,37 @@ int main(int argc, char **argv) {
     namelistfile = argv[5];
     scaledpath = argv[6];
     allpatchespath = argv[7];
-//    matchpath = argv[7];
-//    nonmatchpath = argv[8];
     matchtablepath = argv[8];
     nonmatchtablepath = argv[9];
     realdepthscalefactor = argv[10];
 
-    //若不存在 创建完没有打开
-    char *matchtable = const_cast<char *>(matchtablepath.c_str());
-    fstream _mfile;
-    _mfile.open(matchtable, ios::in);
-    if (!_mfile) {
-        ofstream mfile(matchtable);
-        mfile.close();
-    }
-    _mfile.close();
+//    // If filepath doesn't exist, create it.
+//    char *matchtable = const_cast<char *>(matchtablepath.c_str());
+//    fstream _mfile;
+//    _mfile.open(matchtable, ios::in);
+//    if (!_mfile) {
+//        ofstream mfile(matchtable);
+//        mfile.close();
+//    }
+//    _mfile.close();
+//
+//    char *nonmatchtable = const_cast<char *>(nonmatchtablepath.c_str());
+//    ofstream nmfile(nonmatchtable);
+//    fstream _nmfile;
+//    _nmfile.open(nonmatchtable, ios::in);
+//    if (!_nmfile) {
+//        ofstream nmfile(nonmatchtable);
+//        nmfile.close();
+//    }
+//    _nmfile.close();
 
-    char *nonmatchtable = const_cast<char *>(nonmatchtablepath.c_str());
-    ofstream nmfile(nonmatchtable);
-    fstream _nmfile;
-    _nmfile.open(nonmatchtable, ios::in);
-    if (!_nmfile) {
-        ofstream nmfile(nonmatchtable);
-        nmfile.close();
-    }
-    _nmfile.close();
+//    if (generateList(feature_address, depth_address, internalfile, externalfile, namelistfile, matchtablepath,
+//                     nonmatchtablepath, realdepthscalefactor)) {
+//        cout << "generateList done." << endl;
+//    }
 
-    if (generateList(feature_address, depth_address, internalfile, externalfile, namelistfile, matchtablepath, nonmatchtablepath, realdepthscalefactor)){
-        cout << "generateList done." << endl;
+    if (generateAllPatches(feature_address, depth_address, internalfile, externalfile, namelistfile, scaledpath, allpatchespath)){
+        cout << "generateAllPatches done." << endl;
     }
 
     return 0;
