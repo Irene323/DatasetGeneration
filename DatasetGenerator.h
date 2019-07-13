@@ -80,6 +80,10 @@ Eigen::Matrix3f readInternal(int imagename, const string &internalfile, int *wid
 
 Mat rotpoint(float tmpx, float tmpy, float cx, float cy, float ori0);
 
+int findNearestLevelIndex(const vector<float> &pyramid, float scale);
+
+bool ifTooCloseToEdge(const vector<float> &pyramid, const Mat &point, int picwidth, int picheight);
+
 void crop(int picId0, Mat point0, string patchpath, map<int, Mat> &pyramidMap, const vector<float> &pyramid, int patchsize);
 
 #endif //DATASETGENERATION_DATASETGENERATOR_H

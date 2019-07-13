@@ -2,7 +2,7 @@
 
 bool generateAllPatches(const string &feature_address, const string &depth_address, const string &internalfile,
                         const string &externalfile, const string &namelistfile, const string &scaledpath,
-                        const string &patchpath) {
+                        const string &patchpath, const vector<float> &pyramid) {
     bool flag = false;
     int picwidth = 0, picheight = 0;
 
@@ -10,11 +10,6 @@ bool generateAllPatches(const string &feature_address, const string &depth_addre
     vector<int> namelist = readDataIntVec(namelistfile);
     FIRSTIMAGENAME = namelist[0];
     cout << "FIRSTIMAGENAME after changed in generateAlPatches: " << FIRSTIMAGENAME << endl;
-    vector<float> pyramid;
-    for (int i = 0; i < 13; i++) {//first four octaves
-        pyramid.push_back(1.6 * pow(2, (float) i / 3));
-        cout << pyramid[i] << endl;
-    }
 
     //for every picture
 #pragma omp parallel for num_threads(8)
@@ -47,6 +42,9 @@ bool generateAllPatches(const string &feature_address, const string &depth_addre
             point0.at<float>(0, 6) = table0.at<float>(i, 0);//feature ID
 
             //if the point is too close to the edge, we do not take them into account
+//            if (ifTooCloseToEdge(pyramid, point0, picwidth, picheight)){
+//                continue;
+//            }
             float distthresh0 = sqrt(2) * 32 * point0.at<float>(0, 3);
             if ((point0.at<float>(0, 0) < distthresh0 || point0.at<float>(0, 0) > picwidth - distthresh0
                  || point0.at<float>(0, 1) < distthresh0 || point0.at<float>(0, 1) > picheight - distthresh0)) {
@@ -61,7 +59,7 @@ bool generateAllPatches(const string &feature_address, const string &depth_addre
 
 bool generateList(const string &feature_address, const string &depth_address, const string &internalfile,
                   const string &externalfile, const string &namelistfile, const string &matchtablepath,
-                  const string &nonmatchtablepath, const string &depthscalefactor) {
+                  const string &nonmatchtablepath, const string &depthscalefactor, const vector<float> &pyramid) {
     srand((unsigned) time(nullptr));
     float realdepthscalefactor = atof(
             depthscalefactor.c_str());//22.8232 / 0.918737;// the dense map should be scaled to real size and compare
@@ -111,12 +109,10 @@ bool generateList(const string &feature_address, const string &depth_address, co
             //each vector contains the feature point, which has 7 elements:x0,y0,z0,xscale,yscale,ori,featureID(in this pic)
 
             for (int i = 0; i < table0.rows; i++) {
-                //if (table0.at<float>(i, 0) != 718) continue;
                 if (table0.at<float>(i, 3) > 25.6)
                     continue; //too large scale, not in the first 4 octaves, may be wrong, skip
-//                if (table0.at<float>(i, 0) == 0) break;//all the features have been read
-                //point in pic1: x0,y0,z0,xscale0,yscale0,ori0,featureID
 
+                //point in pic1: x0,y0,z0,xscale0,yscale0,ori0,featureID
                 Mat point0 = Mat::zeros(1, 7, CV_32FC1);
                 point0.at<float>(0, 0) = table0.at<float>(i, 1);//x0
                 point0.at<float>(0, 1) = table0.at<float>(i, 2);//y0
@@ -129,6 +125,9 @@ bool generateList(const string &feature_address, const string &depth_address, co
                 Mat point2final = Mat::zeros(1, 7, CV_32FC1);
 
                 //if the point is too close to the edge, we do not take them into account
+//                if (ifTooCloseToEdge(pyramid, point0, picwidth0, picheight0)){
+//                    continue;
+//                }
                 float distthresh0 = sqrt(2) * 32 * point0.at<float>(0, 3);
                 if ((point0.at<float>(0, 0) < distthresh0 || point0.at<float>(0, 0) > picwidth0 - distthresh0
                      || point0.at<float>(0, 1) < distthresh0 || point0.at<float>(0, 1) > picheight0 - distthresh0)) {
@@ -167,12 +166,14 @@ bool generateList(const string &feature_address, const string &depth_address, co
                     point2.at<float>(0, 5) = table2.at<float>(j, 5);//orientation
                     point2.at<float>(0, 6) = table2.at<float>(j, 0);//feature ID
 
+//                    if (ifTooCloseToEdge(pyramid, point2, picwidth2, picheight2)){
+//                        continue;
+//                    }
                     float radius2 = sqrt(2) * 32 * point2.at<float>(0, 3);
                     if (point2.at<float>(0, 0) < radius2 || point2.at<float>(0, 0) > picwidth2 - radius2
                         || point2.at<float>(0, 1) < radius2 || point2.at<float>(0, 1) > picheight2 - radius2) {
                         continue;
                     }
-
 
                     point2.at<float>(0, 2) = depthtable2.at<float>(cvRound(table2.at<float>(j, 2)),
                                                                    cvRound(table2.at<float>(j, 1)));
@@ -310,13 +311,19 @@ int main(int argc, char **argv) {
     nonmatchtablepath = argv[9];
     realdepthscalefactor = argv[10];
 
-//    if (generateAllPatches(feature_address, depth_address, internalfile, externalfile, namelistfile, scaledpath,
-//                           allpatchespath)) {
-//        cout << "generateAllPatches done." << endl;
-//    }
+    vector<float> pyramid;
+    for (int i = 0; i < 13; i++) {//first four octaves
+        pyramid.push_back(1.6 * pow(2, (float) i / 3));
+        cout << pyramid[i] << endl;
+    }
+
+    if (generateAllPatches(feature_address, depth_address, internalfile, externalfile, namelistfile, scaledpath,
+                           allpatchespath, pyramid)) {
+        cout << "generateAllPatches done." << endl;
+    }
 
     if (generateList(feature_address, depth_address, internalfile, externalfile, namelistfile, matchtablepath,
-                     nonmatchtablepath, realdepthscalefactor)) {
+                     nonmatchtablepath, realdepthscalefactor, pyramid)) {
         cout << "generateList done." << endl;
     }
 

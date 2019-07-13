@@ -410,6 +410,49 @@ Mat rotpoint(float tmpx, float tmpy, float cx, float cy, float ori0) {
     return rst;
 }
 
+int findNearestLevelIndex(const vector<float> &pyramid, float scale){
+    //find nearest level index
+    int nearestIndex = pyramid.size()-1;
+    float distanceLast = 999.9;
+    for (int i = 0; i < pyramid.size(); i++) {
+        auto d = abs(pyramid[i] - scale);
+        if (d > distanceLast) {
+            nearestIndex = i - 1;
+            break;
+        }
+        distanceLast = d;
+    }
+    return nearestIndex;
+}
+
+bool ifTooCloseToEdge(const vector<float> &pyramid, const Mat &point, int picwidth, int picheight){
+    float scale = point.at<float>(0, 3);
+    int nearestIndex = findNearestLevelIndex(pyramid, scale);
+    float a0;//radius of the patch in corresponding scale
+    float x0=picwidth, y0=picheight;//x0: picwidth0 in corresponding scale, y0: picheight0 in corresponding scale
+
+    if (nearestIndex <= 3) {//these scale levels have been upsampled by 2
+        a0 = sqrt(2) * 32 * 2 * scale;
+        x0 *= 2;
+        y0 *= 2;
+    } else if (nearestIndex <= 6) {//these scale levels are of original size
+        a0 = sqrt(2) * 32 * scale;
+    } else if (nearestIndex <= 9) {//these scale levels are downsampled by 2
+        a0 = sqrt(2) * 32 / 2 * scale;
+        x0 /= 2;
+        y0 /= 2;
+    } else {//these scale levels are downsampled by 4
+        a0 = sqrt(2) * 32 / 4 * scale;
+        x0 /= 4;
+        y0 /= 4;
+    }
+    if ((point.at<float>(0, 0) < a0 || point.at<float>(0, 0) > x0 - a0
+         || point.at<float>(0, 1) < a0 || point.at<float>(0, 1) > y0 - a0)) {
+        return true;
+    }
+    return false;
+}
+
 /*This function normalize and then crop the patch*/
 void
 crop(int picId0, Mat point0, string patchpath, map<int, Mat> &pyramidMap, const vector<float> &pyramid, int patchsize) {
@@ -421,16 +464,7 @@ crop(int picId0, Mat point0, string patchpath, map<int, Mat> &pyramidMap, const 
     float scale0 = point0.at<float>(0, 3), ori0 = point0.at<float>(0, 5);
 
     //find nearest level index
-    int nearestIndex = pyramid.size()-1;
-    float distanceLast = 999.9;
-    for (int i = 0; i < pyramid.size(); i++) {
-        auto d = abs(pyramid[i] - scale0);
-        if (d > distanceLast) {
-            nearestIndex = i - 1;
-            break;
-        }
-        distanceLast = d;
-    }
+    int nearestIndex = findNearestLevelIndex(pyramid, scale0);
 
     //cropping patch
     Mat patch = Mat::zeros(patchsize, patchsize, CV_32FC3);
