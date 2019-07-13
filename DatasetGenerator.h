@@ -68,8 +68,7 @@ vector<int> readDataIntVec(const string &namelistfile);
 Mat locationtrans(float x1, float y1, float z1, Eigen::Matrix3f &internal0, Eigen::Matrix3f &internal1,
                   Eigen::Matrix4f &external0, Eigen::Matrix4f &external1);
 
-Mat
-decision(Mat p1, Mat p2, float threshloc, float threshdepth, float realdepthscale, float scalethresh, float orithresh);
+int decision(Mat p1, Mat p2, float threshloc, float threshdepth, float realdepthscale, float scalethresh, float orithresh);
 
 Eigen::Matrix4f getExternal(int imagename, const string &externalfile);
 
@@ -81,6 +80,6 @@ Eigen::Matrix3f readInternal(int imagename, const string &internalfile, int *wid
 
 Mat rotpoint(float tmpx, float tmpy, float cx, float cy, float ori0);
 
-void crop(int picId0, Mat point0, string patchpath, const string &scaledpath, const vector<float> &pyramid, int patchsize);
+void crop(int picId0, Mat point0, string patchpath, map<int, Mat> &pyramidMap, const vector<float> &pyramid, int patchsize);
 
 #endif //DATASETGENERATION_DATASETGENERATOR_H

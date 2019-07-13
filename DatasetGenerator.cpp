@@ -26,7 +26,7 @@ inline vector<string> split(const string &str, const string &c) {
 inline int countLines(const string &filePath) {
     fstream fin(filePath, ios::in);
     if (!fin) {
-        cerr << "can not open file" << endl;
+        cerr << "countLines: can not open file: " << filePath << endl;
         return -1;
     }
     char c;
@@ -43,7 +43,7 @@ Point2i getDepthMapSize(const string &filePath) {
     Point2i size(-1, -1);
     fstream fin(filePath, ios::in);
     if (!fin) {
-        cerr << "can not open file" << endl;
+        cerr << "getDepthMapSize: can not open file: "<< filePath << endl;
         return size;
     }
     string s;
@@ -69,7 +69,7 @@ void writePair(int picID1, int featureID1, int picID2, int featureID2, const str
                const string &nonmatchtablepath) {
     std::ofstream file(flag == "match" ? matchtablepath : nonmatchtablepath, std::ios::app);
     if (file.fail()) {
-        cout << "can not open file" << endl;
+        cout << "writePair: can not open file" << endl;
     }
 
     file << picID1 << "\t" << featureID1 << "\t" << picID2 << "\t" << featureID2 << "\n";
@@ -182,16 +182,14 @@ output = 1: match
 0: nothing particular
 
 */
-Mat
-decision(Mat p1, Mat p2, float threshloc, float threshdepth, float realdepthscale, float scalethresh, float orithresh) {
+int decision(Mat p1, Mat p2, float threshloc, float threshdepth, float realdepthscale, float scalethresh, float orithresh) {
     //now we are supposing that in each Mat the scale
     //col0	col1	col2	col3		col4		col5	col6
     //x		y		z		xscale0		yscale0		ori0	featureID
     //xscale and yscale is the same in this case
     //cout << "into function DECISION" << endl;
 
-    Mat rst = Mat::zeros(1, 2, CV_32FC1);
-    float flag = 0, flag0 = 0, flag1 = 0.;
+    int flag = 0, flag0 = 0, flag1 = 0;
     //float nnd = nearestneighbour;
 
     //location check
@@ -226,11 +224,7 @@ decision(Mat p1, Mat p2, float threshloc, float threshdepth, float realdepthscal
     } else { flag = 0; }
     //cout << "flag is " << flag << endl;
 
-    rst.at<float>(0, 0) = flag;
-    //rst.at<float>(0, 1) = nnd;
-
-    return rst;
-
+    return flag;
 }
 
 /*
@@ -418,7 +412,7 @@ Mat rotpoint(float tmpx, float tmpy, float cx, float cy, float ori0) {
 
 /*This function normalize and then crop the patch*/
 void
-crop(int picId0, Mat point0, string patchpath, const string &scaledpath, const vector<float> &pyramid, int patchsize) {
+crop(int picId0, Mat point0, string patchpath, map<int, Mat> &pyramidMap, const vector<float> &pyramid, int patchsize) {
     float featureId0 = point0.at<float>(0, 6);
     string patchname0 = to_string(picId0) + "_" + to_string(int(featureId0)) + ".png";
 
@@ -426,29 +420,21 @@ crop(int picId0, Mat point0, string patchpath, const string &scaledpath, const v
     int x0 = point0.at<float>(0, 0), y0 = point0.at<float>(0, 1);
     float scale0 = point0.at<float>(0, 3), ori0 = point0.at<float>(0, 5);
 
-    //find nearest level
-    float nearest = *pyramid.rbegin();
-    int nearestIndex = 0;
+    //find nearest level index
+    int nearestIndex = pyramid.size()-1;
     float distanceLast = 999.9;
     for (int i = 0; i < pyramid.size(); i++) {
         auto d = abs(pyramid[i] - scale0);
         if (d > distanceLast) {
-            nearest = pyramid[i - 1];
             nearestIndex = i - 1;
             break;
         }
         distanceLast = d;
     }
-    char a[10];
-    sprintf(a,"%.1f",nearest);
-    string picadd0 = scaledpath + a + "\\IMG_" + to_string(picId0) + ".png";
 
     //cropping patch
     Mat patch = Mat::zeros(patchsize, patchsize, CV_32FC3);
-    cout << picadd0 << endl;
-    Mat img0 = imread(picadd0);
-    //imshow("img0", img0);
-    Mat img0blur = img0.clone();
+    Mat img0blur = pyramidMap[nearestIndex].clone(); // get the corresponding scale level image
 
     //find the corresponding patch size and feature location in its scale
     int a0;//half of the patch size in corresponding scale

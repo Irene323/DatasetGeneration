@@ -1,6 +1,5 @@
 #include "DatasetGenerator.h"
 
-
 bool generateAllPatches(const string &feature_address, const string &depth_address, const string &internalfile,
                         const string &externalfile, const string &namelistfile, const string &scaledpath,
                         const string &patchpath) {
@@ -13,7 +12,7 @@ bool generateAllPatches(const string &feature_address, const string &depth_addre
     cout << "FIRSTIMAGENAME after changed in generateAlPatches: " << FIRSTIMAGENAME << endl;
     vector<float> pyramid;
     for (int i = 0; i < 13; i++) {//first four octaves
-        pyramid.push_back(1.6 * pow(2, (float)i / 3));
+        pyramid.push_back(1.6 * pow(2, (float) i / 3));
         cout << pyramid[i] << endl;
     }
 
@@ -25,6 +24,12 @@ bool generateAllPatches(const string &feature_address, const string &depth_addre
         Mat table0 = readDataIntoMat(*it, "feature", feature_address, depth_address);
         //internal matrix
         Eigen::Matrix3f internal = readInternal(*it, internalfile, &picwidth, &picheight);
+        //read all the scales of this picture
+        map<int, Mat> pyramidMap{};
+        for (int i = 0; i < pyramid.size(); i++) {
+//            cout << scaledpath + to_string(i) + "/IMG_" + to_string(*it) + ".png" << endl;
+            pyramidMap[i] = imread(scaledpath + to_string(i) + "/IMG_" + to_string(*it) + ".png");
+        }
 
         //for every feature
         for (int i = 0; i < table0.rows; i++) {
@@ -47,7 +52,7 @@ bool generateAllPatches(const string &feature_address, const string &depth_addre
                  || point0.at<float>(0, 1) < distthresh0 || point0.at<float>(0, 1) > picheight - distthresh0)) {
                 continue;
             }
-            crop(*it, point0, patchpath, scaledpath, pyramid, 64);
+            crop(*it, point0, patchpath, pyramidMap, pyramid, 64);
         }
     }
     flag = true;
@@ -173,17 +178,13 @@ bool generateList(const string &feature_address, const string &depth_address, co
                                                                    cvRound(table2.at<float>(j, 1)));
 
                     //compare transformed point0: point1 and point2
-                    //caomarest = [flag, nearestneighbourdst(if flag = 1)]
-                    Mat comparerst = Mat::zeros(1, 2, CV_32FC1);
                     //cout << "point2 is pic " <<*it1<< "number "<<point2.at<float>(0,6)<< endl;
-                    comparerst = decision(point1, point2, locthresh, depththresh, realdepthscalefactor, scalethresh,
-                                          orithresh);
 
-                    float flag = comparerst.at<float>(0, 0);
+                    int flag = decision(point1, point2, locthresh, depththresh, realdepthscalefactor, scalethresh, orithresh);
 
-                    if (flag == 0.) { continue; }
+                    if (flag == 0) { continue; }
 
-                    if (flag == -1.) {
+                    if (flag == -1) {
                         //crop non-match
                         //check if the point is too close to edge
                         if (rand() / double(RAND_MAX) > 0.98) {
@@ -194,7 +195,7 @@ bool generateList(const string &feature_address, const string &depth_address, co
                         //normpatch(*it, point0, *it1, point2, "unmatch");
                     }
 
-                    if (flag == 1.) {
+                    if (flag == 1) {
                         numofnearest++;
                         if (numofnearest > 1) continue;
                         point2final = point2.clone();
@@ -278,8 +279,9 @@ bool generateList(const string &feature_address, const string &depth_address, co
 
 /*
  Usage:
- /home/yirenli/dev/DatasetGenerationHelper/out/keypoints/ /home/yirenli/dev/DatasetGenerationHelper/out/depth_maps/ /home/yirenli/dev/DatasetGenerationHelper/out/cameras_images_txt/cameras.txt /home/yirenli/dev/DatasetGenerationHelper/out/cameras_images_txt/images.txt /home/yirenli/dev/DatasetGenerationHelper/out/namelist.txt /home/yirenli/dev/DatasetGenerationHelper/out/scale/ ../out/all_patches/ ../out/match_af.txt ../out/nonmatch_af.txt 18.1026
- */
+ /home/yirenli/dev/DatasetGenerationHelper/out/af/keypoints/ /home/yirenli/dev/DatasetGenerationHelper/out/af/depth_maps/ /home/yirenli/dev/DatasetGenerationHelper/out/af/cameras_images_txt/cameras.txt /home/yirenli/dev/DatasetGenerationHelper/out/af/cameras_images_txt/images.txt /home/yirenli/dev/DatasetGenerationHelper/out/af/namelist.txt /home/yirenli/dev/DatasetGenerationHelper/out/af/scale/ ../out/af/all_patches/ ../out/af/txt/match_af.txt ../out/af/txt/nonmatch_af.txt 18.1026
+ /home/yirenli/dev/DatasetGenerationHelper/out/ao/keypoints/ /home/yirenli/dev/DatasetGenerationHelper/out/ao/depth_maps/ /home/yirenli/dev/DatasetGenerationHelper/out/ao/cameras_images_txt/cameras.txt /home/yirenli/dev/DatasetGenerationHelper/out/ao/cameras_images_txt/images.txt /home/yirenli/dev/DatasetGenerationHelper/out/ao/namelist.txt /home/yirenli/dev/DatasetGenerationHelper/out/ao/scale/ ../out/ao/all_patches/ ../out/ao/txt/match_ao.txt ../out/ao/txt/nonmatch_ao.txt 10.3436
+  */
 int main(int argc, char **argv) {
     if (argc != 11) {
         cout << "Incorrect number of arguments given." << endl;
@@ -290,7 +292,7 @@ int main(int argc, char **argv) {
         cout << "- external file (images.txt)" << endl;
         cout << "- namelist file" << endl;
         cout << "- scaled images path" << endl;
-        cout << "- all patches dir" << endl;
+        cout << "- all patches dir(make sure it already exists!!!)" << endl;
         cout << "- matchtablepath" << endl;
         cout << "- nonmatch table path" << endl;
         cout << "- realdepthscalefactor" << endl;
@@ -308,33 +310,14 @@ int main(int argc, char **argv) {
     nonmatchtablepath = argv[9];
     realdepthscalefactor = argv[10];
 
-//    // If filepath doesn't exist, create it.
-//    char *matchtable = const_cast<char *>(matchtablepath.c_str());
-//    fstream _mfile;
-//    _mfile.open(matchtable, ios::in);
-//    if (!_mfile) {
-//        ofstream mfile(matchtable);
-//        mfile.close();
-//    }
-//    _mfile.close();
-//
-//    char *nonmatchtable = const_cast<char *>(nonmatchtablepath.c_str());
-//    ofstream nmfile(nonmatchtable);
-//    fstream _nmfile;
-//    _nmfile.open(nonmatchtable, ios::in);
-//    if (!_nmfile) {
-//        ofstream nmfile(nonmatchtable);
-//        nmfile.close();
-//    }
-//    _nmfile.close();
-
-//    if (generateList(feature_address, depth_address, internalfile, externalfile, namelistfile, matchtablepath,
-//                     nonmatchtablepath, realdepthscalefactor)) {
-//        cout << "generateList done." << endl;
+//    if (generateAllPatches(feature_address, depth_address, internalfile, externalfile, namelistfile, scaledpath,
+//                           allpatchespath)) {
+//        cout << "generateAllPatches done." << endl;
 //    }
 
-    if (generateAllPatches(feature_address, depth_address, internalfile, externalfile, namelistfile, scaledpath, allpatchespath)){
-        cout << "generateAllPatches done." << endl;
+    if (generateList(feature_address, depth_address, internalfile, externalfile, namelistfile, matchtablepath,
+                     nonmatchtablepath, realdepthscalefactor)) {
+        cout << "generateList done." << endl;
     }
 
     return 0;
